@@ -55,6 +55,8 @@ export interface ActiveTasks {
 export interface AppSettings {
     globalSystemPrompt: string;
     continueFromLastChapter: boolean;
+    fontSize: number; // in rem
+    paragraphSpacing: number; // in em
 }
 
 export interface AppStateSnapshot {

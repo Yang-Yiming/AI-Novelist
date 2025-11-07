@@ -11,3 +11,5 @@ export { default as PlusIcon } from './PlusIcon';
 export { default as TrashIcon } from './TrashIcon';
 export { default as ChevronDownIcon } from './ChevronDownIcon';
 export { default as SyncIcon } from './SyncIcon';
+export { default as CodeBracketIcon } from './CodeBracketIcon';
+export { default as DocumentTextIcon } from './DocumentTextIcon';

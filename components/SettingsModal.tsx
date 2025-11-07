@@ -53,7 +53,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                     />
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-t border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between py-4 border-t border-gray-200 dark:border-gray-700">
                     <div>
                         <label htmlFor="continue-context" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Continue Context from Previous Chapter
@@ -74,6 +74,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                             className={`${currentSettings.continueFromLastChapter ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                         />
                     </button>
+                </div>
+
+                <div className="space-y-4 py-4 border-t border-gray-200 dark:border-gray-700">
+                     <div>
+                        <label htmlFor="font-size-slider" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Markdown Font Size ({currentSettings.fontSize.toFixed(3)}rem)
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Controls the text size in the rendered markdown view.
+                        </p>
+                        <input
+                            id="font-size-slider"
+                            type="range"
+                            min="1"
+                            max="1.5"
+                            step="0.0625"
+                            value={currentSettings.fontSize}
+                            onChange={(e) => setCurrentSettings({ ...currentSettings, fontSize: parseFloat(e.target.value) })}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600"
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="paragraph-spacing-slider" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Markdown Paragraph Spacing ({currentSettings.paragraphSpacing.toFixed(1)}em)
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Controls the vertical space between paragraphs in the rendered markdown view.
+                        </p>
+                        <input
+                            id="paragraph-spacing-slider"
+                            type="range"
+                            min="1"
+                            max="2.5"
+                            step="0.1"
+                            value={currentSettings.paragraphSpacing}
+                            onChange={(e) => setCurrentSettings({ ...currentSettings, paragraphSpacing: parseFloat(e.target.value) })}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600"
+                        />
+                    </div>
                 </div>
 
                 <div className="bg-gray-100 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">

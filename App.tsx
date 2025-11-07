@@ -17,7 +17,12 @@ const App: React.FC = () => {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [activeTasks, setActiveTasks] = useState<ActiveTasks>({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {} });
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [settings, setSettings] = useState<AppSettings>({ globalSystemPrompt: '', continueFromLastChapter: false });
+    const [settings, setSettings] = useState<AppSettings>({ 
+        globalSystemPrompt: '', 
+        continueFromLastChapter: false,
+        fontSize: 1.125, // default rem for prose-lg
+        paragraphSpacing: 1.6, // default em
+    });
 
     useEffect(() => {
         // Simple theme management based on system preference
@@ -29,9 +34,18 @@ const App: React.FC = () => {
 
         const savedSettings = localStorage.getItem('ai-novelist-settings');
         if (savedSettings) {
-            setSettings(JSON.parse(savedSettings));
+            const parsed = JSON.parse(savedSettings);
+            // Ensure new settings have default values if loading from older state
+            parsed.fontSize = parsed.fontSize ?? 1.125;
+            parsed.paragraphSpacing = parsed.paragraphSpacing ?? 1.6;
+            setSettings(parsed);
         }
     }, []);
+
+    useEffect(() => {
+        document.documentElement.style.setProperty('--markdown-font-size', `${settings.fontSize}rem`);
+        document.documentElement.style.setProperty('--markdown-paragraph-spacing', `${settings.paragraphSpacing}em`);
+      }, [settings.fontSize, settings.paragraphSpacing]);
 
     const handleSettingsSave = (newSettings: AppSettings) => {
         setSettings(newSettings);
@@ -264,6 +278,8 @@ const App: React.FC = () => {
 
                         // Backwards compatibility for new settings
                         loadedState.settings.continueFromLastChapter = loadedState.settings.continueFromLastChapter ?? false;
+                        loadedState.settings.fontSize = loadedState.settings.fontSize ?? 1.125;
+                        loadedState.settings.paragraphSpacing = loadedState.settings.paragraphSpacing ?? 1.6;
 
                         setInitialIdea(loadedState.initialIdea);
                         setPlan(loadedState.plan);

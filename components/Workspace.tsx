@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { marked } from 'marked';
 import { AppState, Chapter, ActiveTasks } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import ManuscriptToolbar from './ManuscriptToolbar';
-import { SparklesIcon, BookOpenIcon, CheckBadgeIcon, DownloadIcon, SyncIcon } from './icons';
+import { SparklesIcon, CodeBracketIcon, DocumentTextIcon } from './icons';
 
 interface WorkspaceProps {
     appState: AppState;
@@ -39,6 +40,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
     activeTasks,
 }) => {
     const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+    const [viewModes, setViewModes] = useState<Record<number, 'text' | 'markdown'>>({});
     const observer = useRef<IntersectionObserver | null>(null);
     const chapterRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -49,7 +51,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                 textarea.style.height = `${textarea.scrollHeight}px`;
             }
         });
-    }, [chapters]);
+    }, [chapters, viewModes]);
 
     useEffect(() => {
         if (observer.current) observer.current.disconnect();
@@ -70,6 +72,13 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
         return () => currentObserver.disconnect();
     }, [chapters.length]);
+
+    const handleToggleViewMode = (chapterId: number, mode: 'text' | 'markdown') => {
+        setViewModes(prev => ({
+            ...prev,
+            [chapterId]: mode,
+        }));
+    };
     
     const handleNavigateChapter = (direction: 'prev' | 'next') => {
         if (activeChapterId === null && chapters.length > 0) {
@@ -89,10 +98,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
         document.getElementById(`chapter-${nextChapterId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
-    // FIX: Updated function signature to correctly type the `action` callback.
-    // The `action` function receives `chapterIndex` as its first argument,
-    // followed by any other arguments passed to `handleChapterAction`.
-    // The original signature did not account for `chapterIndex`, causing a type error.
     const handleChapterAction = <T extends any[]>(action: (index: number, ...args: T) => void, ...args: T) => {
         if (activeChapterId !== null) {
             const chapterIndex = chapters.findIndex(c => c.id === activeChapterId);
@@ -131,6 +136,8 @@ const Workspace: React.FC<WorkspaceProps> = ({
         );
     }
 
+    const isAnyTaskActive = Object.values(activeTasks).some(v => typeof v === 'boolean' ? v : Object.keys(v).length > 0);
+
     const renderContent = () => {
         switch (appState) {
             case 'INITIAL':
@@ -165,22 +172,53 @@ const Workspace: React.FC<WorkspaceProps> = ({
                                     <p className="mt-2 text-gray-500 dark:text-gray-400">The plan is ready. Click "Write Chapter 1" to begin bringing your story to life.</p>
                                 </div>
                             )}
-                            {chapters.map((chapter, index) => (
+                            {chapters.map((chapter, index) => {
+                                const viewMode = viewModes[chapter.id] || 'text';
+                                return (
                                 <div key={chapter.id} id={`chapter-${chapter.id}`} className="scroll-mt-20 pt-10">
-                                     <h2 className="text-3xl font-bold mb-6 text-gray-800 dark:text-white border-b border-gray-300 dark:border-gray-700 pb-2">{chapter.title}</h2>
-                                    <textarea
-                                        ref={el => chapterRefs.current[index] = el}
-                                        className="w-full p-2 text-lg leading-relaxed font-serif bg-transparent resize-none border-0 focus:ring-0 disabled:opacity-70 dark:text-gray-300"
-                                        value={chapter.content}
-                                        onChange={(e) => {
-                                            onChapterContentChange(index, e.target.value);
-                                            const textarea = e.target;
-                                            textarea.style.height = 'auto';
-                                            textarea.style.height = `${textarea.scrollHeight}px`;
-                                        }}
-                                        disabled={Object.values(activeTasks).some(v => typeof v === 'boolean' ? v : Object.keys(v).length > 0)}
-                                        rows={1}
-                                    />
+                                     <div className="flex justify-between items-center mb-6 border-b border-gray-300 dark:border-gray-700 pb-2">
+                                        <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{chapter.title}</h2>
+                                        <div className="flex items-center gap-1 p-1 bg-gray-200 dark:bg-slate-800 rounded-lg">
+                                            <button
+                                                onClick={() => handleToggleViewMode(chapter.id, 'text')}
+                                                className={`p-2 rounded-md transition-colors ${viewMode === 'text' ? 'bg-white dark:bg-slate-700 shadow' : 'hover:bg-gray-300/50 dark:hover:bg-slate-700/50'}`}
+                                                aria-label="View raw text"
+                                                title="View raw text"
+                                            >
+                                                <CodeBracketIcon />
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleViewMode(chapter.id, 'markdown')}
+                                                className={`p-2 rounded-md transition-colors ${viewMode === 'markdown' ? 'bg-white dark:bg-slate-700 shadow' : 'hover:bg-gray-300/50 dark:hover:bg-slate-700/50'}`}
+                                                aria-label="View rendered markdown"
+                                                title="View rendered markdown"
+                                            >
+                                                <DocumentTextIcon />
+                                            </button>
+                                        </div>
+                                     </div>
+
+                                    {viewMode === 'text' ? (
+                                        <textarea
+                                            ref={el => chapterRefs.current[index] = el}
+                                            className="w-full p-2 text-lg leading-relaxed font-serif bg-transparent resize-none border-0 focus:ring-0 disabled:opacity-70 dark:text-gray-300"
+                                            value={chapter.content}
+                                            onChange={(e) => {
+                                                onChapterContentChange(index, e.target.value);
+                                                const textarea = e.target;
+                                                textarea.style.height = 'auto';
+                                                textarea.style.height = `${textarea.scrollHeight}px`;
+                                            }}
+                                            disabled={isAnyTaskActive}
+                                            rows={1}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="prose dark:prose-invert font-serif leading-relaxed p-2 max-w-none prose-dynamic"
+                                            dangerouslySetInnerHTML={{ __html: marked(chapter.content) as string }}
+                                        />
+                                    )}
+
                                      {chapter.feedback && (
                                         <div className="mt-4 flex-1 bg-gray-100 dark:bg-slate-900/50 p-4 rounded-lg border border-gray-200 dark:border-slate-700">
                                             <div className="flex justify-between items-center mb-2">
@@ -202,7 +240,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                            )})}
                         </div>
                         <ManuscriptToolbar
                             chapters={chapters}
