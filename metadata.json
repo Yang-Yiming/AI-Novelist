@@ -1,0 +1,5 @@
+{
+  "name": "AI Novelist Agent",
+  "description": "An AI-powered novel writing assistant with three agents: a Planner to create world settings, characters, and plots; a Writer to draft chapters; and a Checker to review for consistency and foreshadowing. Users can guide the process from initial idea to polished manuscript.",
+  "requestFramePermissions": []
+}
