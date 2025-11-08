@@ -11,6 +11,7 @@ const App: React.FC = () => {
     const [initialIdea, setInitialIdea] = useState<string>('');
     const [plan, setPlan] = useState<Plan | null>(null);
     const [chapters, setChapters] = useState<Chapter[]>([]);
+    const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
     const [appState, setAppState] = useState<AppState>('INITIAL');
     const [isPlanLoading, setIsPlanLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -121,6 +122,7 @@ const App: React.FC = () => {
                 content: newChapterContent,
             };
             setChapters(prevChapters => [...prevChapters, newChapter]);
+            setActiveChapterId(newChapter.id);
         } catch (error) {
             console.error(error);
             setErrorMessage('Failed to write the chapter. Please try again.');
@@ -286,6 +288,13 @@ const App: React.FC = () => {
                         setChapters(loadedState.chapters);
                         setSettings(loadedState.settings);
                         setAppState(loadedState.appState);
+
+                        if (loadedState.chapters.length > 0) {
+                            setActiveChapterId(loadedState.chapters[loadedState.chapters.length - 1].id);
+                        } else {
+                            setActiveChapterId(null);
+                        }
+                        
                         setActiveTasks({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {} }); // Reset active tasks
                         // Also save loaded settings to localStorage
                         localStorage.setItem('ai-novelist-settings', JSON.stringify(loadedState.settings));
@@ -345,6 +354,8 @@ const App: React.FC = () => {
                     onInitialIdeaChange={setInitialIdea}
                     onGeneratePlan={handleGeneratePlan}
                     chapters={chapters}
+                    activeChapterId={activeChapterId}
+                    onActiveChapterChange={setActiveChapterId}
                     onChapterContentChange={updateChapterContent}
                     onWriteChapter={handleWriteChapter}
                     onCheckChapter={handleCheckChapter}

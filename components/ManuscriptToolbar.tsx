@@ -9,6 +9,7 @@ interface ManuscriptToolbarProps {
     activeChapterId: number | null;
     onWriteChapter: () => void;
     onExportChapter: () => void;
+    onChapterSelect: (id: number) => void;
     onNavigateChapter: (direction: 'prev' | 'next') => void;
     onCheckChapter: () => void;
     onReviseChapter: (prompt: string) => void;
@@ -24,7 +25,7 @@ const PaperAirplaneIcon: React.FC = () => (
 );
 
 const ManuscriptToolbar: React.FC<ManuscriptToolbarProps> = ({
-    chapters, activeChapterId, onWriteChapter, onExportChapter, onNavigateChapter, onCheckChapter, onReviseChapter, onSyncPlanWithChapter, isPlanReady, activeTasks
+    chapters, activeChapterId, onWriteChapter, onExportChapter, onChapterSelect, onNavigateChapter, onCheckChapter, onReviseChapter, onSyncPlanWithChapter, isPlanReady, activeTasks
 }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showRevisionPanel, setShowRevisionPanel] = useState(false);
@@ -38,7 +39,7 @@ const ManuscriptToolbar: React.FC<ManuscriptToolbarProps> = ({
     const isCurrentSyncing = activeChapterIndex !== -1 && activeTasks.syncingPlan[activeChapterIndex];
 
     const handleChapterClick = (chapterId: number) => {
-        document.getElementById(`chapter-${chapterId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        onChapterSelect(chapterId);
         setIsDropdownOpen(false);
     };
     
