@@ -98,7 +98,7 @@ const App: React.FC = () => {
         }
     }, [plan, settings.globalSystemPrompt]);
 
-    const handleWriteChapter = useCallback(async () => {
+    const handleWriteChapter = useCallback(async (userPrompt: string = '') => {
         if (!plan || activeTasks.writingChapter) {
             return;
         }
@@ -106,8 +106,6 @@ const App: React.FC = () => {
         setActiveTasks(prev => ({ ...prev, writingChapter: true }));
         setAppState('WRITING'); // Ensure view is correct
         try {
-            const previousChaptersSummary = chapters.map(c => `Chapter ${c.id}: ${c.content.substring(0, 200)}...`).join('\n');
-            
             let lastChapterContentSnippet: string | null = null;
             if (settings.continueFromLastChapter && chapters.length > 0) {
                 const lastChapterContent = chapters[chapters.length - 1].content;
@@ -115,7 +113,7 @@ const App: React.FC = () => {
                 lastChapterContentSnippet = lastChapterContent.slice(-250);
             }
 
-            const newChapterContent = await writeChapter(plan, chapters.length + 1, previousChaptersSummary, lastChapterContentSnippet, settings.globalSystemPrompt);
+            const newChapterContent = await writeChapter(plan, chapters, chapters.length + 1, lastChapterContentSnippet, settings.globalSystemPrompt, userPrompt);
             const newChapter: Chapter = {
                 id: chapters.length + 1,
                 title: `Chapter ${chapters.length + 1}`,
@@ -198,6 +196,11 @@ const App: React.FC = () => {
             });
         }
     }, [plan, chapters, settings.globalSystemPrompt]);
+    
+    const handleRegenerateChapter = useCallback(async (chapterIndex: number) => {
+        const prompt = "Please regenerate this chapter completely based on the plot outline. Discard the current content and write a new version from scratch.";
+        await handleReviseChapter(chapterIndex, prompt);
+    }, [handleReviseChapter]);
 
     const handleSyncPlanWithChapter = useCallback(async (chapterIndex: number) => {
         if (!plan || !chapters[chapterIndex]) {
@@ -353,6 +356,7 @@ const App: React.FC = () => {
                     initialIdea={initialIdea}
                     onInitialIdeaChange={setInitialIdea}
                     onGeneratePlan={handleGeneratePlan}
+                    plan={plan}
                     chapters={chapters}
                     activeChapterId={activeChapterId}
                     onActiveChapterChange={setActiveChapterId}
@@ -360,6 +364,7 @@ const App: React.FC = () => {
                     onWriteChapter={handleWriteChapter}
                     onCheckChapter={handleCheckChapter}
                     onReviseChapter={handleReviseChapter}
+                    onRegenerateChapter={handleRegenerateChapter}
                     onSyncPlanWithChapter={handleSyncPlanWithChapter}
                     isPlanReady={!!plan}
                     activeTasks={activeTasks}

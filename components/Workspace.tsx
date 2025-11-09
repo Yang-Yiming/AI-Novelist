@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
-import { AppState, Chapter, ActiveTasks } from '../types';
+import { AppState, Chapter, ActiveTasks, Plan } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import ManuscriptToolbar from './ManuscriptToolbar';
 import { SparklesIcon, CodeBracketIcon, DocumentTextIcon } from './icons';
@@ -13,13 +13,15 @@ interface WorkspaceProps {
     initialIdea: string;
     onInitialIdeaChange: (value: string) => void;
     onGeneratePlan: () => void;
+    plan: Plan | null;
     chapters: Chapter[];
     activeChapterId: number | null;
     onActiveChapterChange: (id: number) => void;
     onChapterContentChange: (index: number, content: string) => void;
-    onWriteChapter: () => void;
+    onWriteChapter: (userPrompt: string) => void;
     onCheckChapter: (index: number) => void;
     onReviseChapter: (index: number, prompt: string) => void;
+    onRegenerateChapter: (index: number) => void;
     onSyncPlanWithChapter: (index: number) => void;
     isPlanReady: boolean;
     activeTasks: ActiveTasks;
@@ -32,6 +34,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
     initialIdea,
     onInitialIdeaChange,
     onGeneratePlan,
+    plan,
     chapters,
     activeChapterId,
     onActiveChapterChange,
@@ -39,6 +42,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
     onWriteChapter,
     onCheckChapter,
     onReviseChapter,
+    onRegenerateChapter,
     onSyncPlanWithChapter,
     isPlanReady,
     activeTasks,
@@ -243,6 +247,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                         }
                         </div>
                         <ManuscriptToolbar
+                            plan={plan}
                             chapters={chapters}
                             activeChapterId={activeChapterId}
                             onWriteChapter={onWriteChapter}
@@ -251,6 +256,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                             onNavigateChapter={handleNavigateChapter}
                             onCheckChapter={() => handleChapterAction(onCheckChapter)}
                             onReviseChapter={(prompt: string) => handleChapterAction(onReviseChapter, prompt)}
+                            onRegenerateChapter={() => handleChapterAction(onRegenerateChapter)}
                             onSyncPlanWithChapter={() => handleChapterAction(onSyncPlanWithChapter)}
                             isPlanReady={isPlanReady}
                             activeTasks={activeTasks}

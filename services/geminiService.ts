@@ -163,24 +163,6 @@ ${plan.tone}
   `;
 }
 
-
-export const writeChapter = async (plan: Plan, chapterNumber: number, previousChaptersSummary: string, lastChapterContentSnippet: string | null, globalSystemPrompt: string): Promise<string> => {
-    const formattedPlan = formatPlanForPrompt(plan);
-    const prompt = `${globalSystemPrompt}\n\nYou are a professional novelist. Your task is to write the next chapter of a story. Adhere strictly to the established context. Do not introduce new characters or plot points that contradict the plan.
-
-${formattedPlan}
-
-${previousChaptersSummary ? `**Previous Chapters Summary:**\n${previousChaptersSummary}\n` : ''}
-${lastChapterContentSnippet ? `**The last paragraph of the previous chapter ended like this, continue from here:**\n...\n${lastChapterContentSnippet}\n` : ''}
-Now, write Chapter ${chapterNumber} following the outline. The chapter should be engaging, match the established tone, and move the story forward.`;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: prompt,
-    });
-    return response.text;
-};
-
 const readChapterContent: FunctionDeclaration = {
     name: 'readChapterContent',
     parameters: {
@@ -220,6 +202,91 @@ const replaceInChapter: FunctionDeclaration = {
     }
 };
 
+
+export const writeChapter = async (plan: Plan, chapters: Chapter[], chapterNumber: number, lastChapterContentSnippet: string | null, globalSystemPrompt: string, userPrompt: string): Promise<string> => {
+    const formattedPlan = formatPlanForPrompt(plan);
+    const previousChaptersSummary = chapters.map(c => `Chapter ${c.id}: ${c.content.substring(0, 200)}...`).join('\n');
+
+    const chat: Chat = ai.chats.create({
+        model: 'gemini-2.5-pro',
+        config: {
+            tools: [{ functionDeclarations: [readChapterContent, findInManuscript] }],
+        },
+    });
+
+    const initialPrompt = `${globalSystemPrompt}\n\nYou are a professional novelist. Your task is to write the next chapter of a story. Adhere strictly to the established context. Do not introduce new characters or plot points that contradict the plan.
+You have access to tools to help you: 'readChapterContent' and 'findInManuscript'. Use them to check other chapters for context if needed. After using tools, you must provide the complete text for the new chapter as your final answer. Output only the final chapter text.
+
+${formattedPlan}
+
+${previousChaptersSummary ? `**Previous Chapters Summary:**\n${previousChaptersSummary}\n` : ''}
+${lastChapterContentSnippet ? `**The last paragraph of the previous chapter ended like this, continue from here:**\n...\n${lastChapterContentSnippet}\n` : ''}
+${userPrompt ? `**User's Instructions:**\n${userPrompt}\n` : ''}
+
+Now, write Chapter ${chapterNumber} following the outline.`;
+
+    const MAX_TURNS = 5;
+    let response = await chat.sendMessage({ message: initialPrompt });
+
+    for (let i = 0; i < MAX_TURNS; i++) {
+        const functionCalls = response.functionCalls;
+        if (!functionCalls || functionCalls.length === 0) {
+            break; // Model is done with tools.
+        }
+
+        const toolResponses = [];
+
+        for (const call of functionCalls) {
+            let result: any;
+            try {
+                switch (call.name) {
+                    case 'readChapterContent': {
+                        const { chapterNumber, lastWords } = call.args;
+                        if (chapterNumber < 1 || chapterNumber > chapters.length) {
+                           result = `Error: Invalid chapter number. There are only ${chapters.length} chapters.`;
+                        } else {
+                            let content = chapters[chapterNumber - 1].content;
+                            if (lastWords) {
+                                content = content.split(' ').slice(-lastWords).join(' ');
+                            }
+                            result = content;
+                        }
+                        break;
+                    }
+                    case 'findInManuscript': {
+                        const { query, caseSensitive = false } = call.args;
+                        const findings: string[] = [];
+                        chapters.forEach((chapter, idx) => {
+                            const content = caseSensitive ? chapter.content : chapter.content.toLowerCase();
+                            const searchQuery = caseSensitive ? query : query.toLowerCase();
+                            if (content.includes(searchQuery)) {
+                                findings.push(`Found in Chapter ${idx + 1}.`);
+                            }
+                        });
+                        result = findings.length > 0 ? findings.join('\n') : `'${query}' not found in any chapter.`;
+                        break;
+                    }
+                    default:
+                        result = `Error: Unknown tool '${call.name}'`;
+                }
+            } catch (e: any) {
+                result = `Error executing tool: ${e.message}`;
+            }
+
+            toolResponses.push({
+                functionResponses: {
+                    id: call.id,
+                    name: call.name,
+                    response: { result: result },
+                }
+            });
+        }
+        
+        response = await chat.sendMessage({ toolResponses });
+    }
+
+    return response.text;
+};
 
 export const reviseChapter = async (plan: Plan, chapters: Chapter[], chapterIndex: number, revisionPrompt: string, globalSystemPrompt: string): Promise<string> => {
     const formattedPlan = formatPlanForPrompt(plan);
