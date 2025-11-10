@@ -50,19 +50,29 @@ const Workspace: React.FC<WorkspaceProps> = ({
     const [viewModes, setViewModes] = useState<Record<number, 'text' | 'markdown'>>({});
     const activeChapterTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-    useEffect(() => {
-        // Auto-resize textarea when the active chapter or its content changes
-        if (activeChapterTextareaRef.current) {
-            const textarea = activeChapterTextareaRef.current;
-            textarea.style.height = 'auto';
-            // Use a timeout to allow the DOM to update with the new content before calculating scrollHeight
-            setTimeout(() => {
-                if (textarea) {
-                    textarea.style.height = `${textarea.scrollHeight}px`;
-                }
-            }, 0);
+    const activeChapterIndex = activeChapterId !== null ? chapters.findIndex(c => c.id === activeChapterId) : -1;
+    const activeChapter = activeChapterIndex !== -1 ? chapters[activeChapterIndex] : null;
+
+    const resizeTextarea = (textarea: HTMLTextAreaElement | null) => {
+        if (textarea) {
+            textarea.style.height = 'auto'; // Reset height
+            textarea.style.height = `${textarea.scrollHeight}px`; // Set to scroll height
         }
-    }, [activeChapterId, chapters]);
+    };
+
+    // Effect to resize textarea when switching chapters
+    useEffect(() => {
+        resizeTextarea(activeChapterTextareaRef.current);
+    }, [activeChapterId]);
+
+    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        // Resize immediately on input to avoid cursor jumps
+        resizeTextarea(e.currentTarget);
+        // Then, update the application state
+        if (activeChapterIndex !== -1) {
+            onChapterContentChange(activeChapterIndex, e.target.value);
+        }
+    };
 
     const handleToggleViewMode = (chapterId: number, mode: 'text' | 'markdown') => {
         setViewModes(prev => ({
@@ -131,9 +141,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
     const isAnyTaskActive = Object.values(activeTasks).some(v => typeof v === 'boolean' ? v : Object.keys(v).length > 0);
 
-    const activeChapterIndex = activeChapterId !== null ? chapters.findIndex(c => c.id === activeChapterId) : -1;
-    const activeChapter = activeChapterIndex !== -1 ? chapters[activeChapterIndex] : null;
-
     const renderContent = () => {
         switch (appState) {
             case 'INITIAL':
@@ -201,12 +208,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                                             className="w-full max-w-none flex-grow p-2 font-serif leading-relaxed bg-transparent resize-none border-0 focus:ring-0 disabled:opacity-70 text-gray-900 dark:text-gray-300"
                                             style={{ fontSize: 'var(--markdown-font-size)' }}
                                             value={activeChapter.content}
-                                            onChange={(e) => {
-                                                onChapterContentChange(activeChapterIndex, e.target.value);
-                                                const textarea = e.target;
-                                                textarea.style.height = 'auto';
-                                                textarea.style.height = `${textarea.scrollHeight}px`;
-                                            }}
+                                            onChange={handleContentChange}
                                             disabled={isAnyTaskActive}
                                             rows={1}
                                         />
