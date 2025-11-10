@@ -1,10 +1,11 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plan, Chapter, AppState, AppSettings, AppStateSnapshot, ActiveTasks } from './types';
-import { generatePlan, refinePlan, writeChapter, checkChapter, reviseChapter, syncPlanWithChapterContent } from './services/geminiService';
+import { Plan, Chapter, AppState, AppSettings, AppStateSnapshot, ActiveTasks, AgentState, AgentLogEntry } from './types';
+import { generatePlan, refinePlan, writeChapter, checkChapter, reviseChapter, syncPlanWithChapterContent, runAgent } from './services/geminiService';
 import PlannerPanel from './components/PlannerPanel';
 import Workspace from './components/Workspace';
 import SettingsModal from './components/SettingsModal';
+import AgentPanel from './components/AgentPanel';
 import { CogIcon, SaveIcon, FolderOpenIcon } from './components/icons';
 
 const App: React.FC = () => {
@@ -16,8 +17,10 @@ const App: React.FC = () => {
     const [isPlanLoading, setIsPlanLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState<string>('');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [activeTasks, setActiveTasks] = useState<ActiveTasks>({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {} });
+    const [activeTasks, setActiveTasks] = useState<ActiveTasks>({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {}, agentIsRunning: false });
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
+    const [agentState, setAgentState] = useState<AgentState>({ isRunning: false, task: '', logs: [] });
     const [settings, setSettings] = useState<AppSettings>({ 
         globalSystemPrompt: '', 
         continueFromLastChapter: false,
@@ -228,6 +231,43 @@ const App: React.FC = () => {
             });
         }
     }, [plan, chapters, settings.globalSystemPrompt]);
+    
+    const handleRunAgent = useCallback(async (task: string) => {
+        if (!plan) {
+            setErrorMessage("Cannot run agent without a plan.");
+            return;
+        }
+        setAgentState({ isRunning: true, task, logs: [] });
+        setActiveTasks(prev => ({ ...prev, agentIsRunning: true }));
+        setIsAgentPanelOpen(true); // Keep panel open while running
+
+        const onUpdate = (log: AgentLogEntry, updatedData?: { plan?: Plan; chapters?: Chapter[] }) => {
+            // Use functional updates to avoid stale state issues
+            setAgentState(prev => ({ ...prev, logs: [...prev.logs, log] }));
+            if (updatedData?.plan) {
+                setPlan(updatedData.plan);
+            }
+            if (updatedData?.chapters) {
+                setChapters(updatedData.chapters);
+                // If chapters are updated, and the active one still exists, keep it.
+                if (activeChapterId && !updatedData.chapters.find(c => c.id === activeChapterId)) {
+                   setActiveChapterId(updatedData.chapters.length > 0 ? updatedData.chapters[updatedData.chapters.length - 1].id : null);
+                }
+            }
+        };
+
+        try {
+            await runAgent(task, plan, chapters, settings.globalSystemPrompt, onUpdate);
+        } catch (error) {
+            console.error("Agent failed:", error);
+            const errLog: AgentLogEntry = { type: 'error', content: `An unexpected error occurred: ${error}` };
+            setAgentState(prev => ({ ...prev, logs: [...prev.logs, errLog] }));
+        } finally {
+            setAgentState(prev => ({ ...prev, isRunning: false }));
+            setActiveTasks(prev => ({ ...prev, agentIsRunning: false }));
+        }
+
+    }, [plan, chapters, settings.globalSystemPrompt, activeChapterId]);
 
 
     const updateChapterContent = useCallback((index: number, content: string) => {
@@ -298,7 +338,7 @@ const App: React.FC = () => {
                             setActiveChapterId(null);
                         }
                         
-                        setActiveTasks({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {} }); // Reset active tasks
+                        setActiveTasks({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {}, agentIsRunning: false }); // Reset active tasks
                         // Also save loaded settings to localStorage
                         localStorage.setItem('ai-novelist-settings', JSON.stringify(loadedState.settings));
                     }
@@ -318,7 +358,7 @@ const App: React.FC = () => {
     const isAnyChapterBeingChecked = Object.keys(activeTasks.checkingChapter).length > 0;
     const isAnyChapterBeingRevised = Object.keys(activeTasks.revisingChapter).length > 0;
     const isAnyChapterBeingSynced = Object.keys(activeTasks.syncingPlan).length > 0;
-    const isAnyTaskActive = activeTasks.writingChapter || isAnyChapterBeingChecked || isAnyChapterBeingRevised || isAnyChapterBeingSynced;
+    const isAnyTaskActive = activeTasks.writingChapter || isAnyChapterBeingChecked || isAnyChapterBeingRevised || isAnyChapterBeingSynced || activeTasks.agentIsRunning;
 
     return (
         <div className="flex h-screen font-sans bg-gray-100 dark:bg-slate-900 text-gray-900 dark:text-gray-100">
@@ -366,6 +406,7 @@ const App: React.FC = () => {
                     onReviseChapter={handleReviseChapter}
                     onRegenerateChapter={handleRegenerateChapter}
                     onSyncPlanWithChapter={handleSyncPlanWithChapter}
+                    onOpenAgentPanel={() => setIsAgentPanelOpen(true)}
                     isPlanReady={!!plan}
                     activeTasks={activeTasks}
                 />
@@ -375,6 +416,13 @@ const App: React.FC = () => {
                 onClose={() => setIsSettingsOpen(false)}
                 settings={settings}
                 onSave={handleSettingsSave}
+            />
+            <AgentPanel
+                isOpen={isAgentPanelOpen}
+                onClose={() => setIsAgentPanelOpen(false)}
+                onRunAgent={handleRunAgent}
+                agentState={agentState}
+                disabled={!plan}
             />
         </div>
     );

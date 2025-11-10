@@ -14,3 +14,5 @@ export { default as SyncIcon } from './SyncIcon';
 export { default as CodeBracketIcon } from './CodeBracketIcon';
 export { default as DocumentTextIcon } from './DocumentTextIcon';
 export { default as RefreshIcon } from './RefreshIcon';
+export { default as AgentIcon } from './AgentIcon';
+export { default as MagicWandIcon } from './MagicWandIcon';

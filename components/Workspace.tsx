@@ -23,6 +23,7 @@ interface WorkspaceProps {
     onReviseChapter: (index: number, prompt: string) => void;
     onRegenerateChapter: (index: number) => void;
     onSyncPlanWithChapter: (index: number) => void;
+    onOpenAgentPanel: () => void;
     isPlanReady: boolean;
     activeTasks: ActiveTasks;
 }
@@ -44,6 +45,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
     onReviseChapter,
     onRegenerateChapter,
     onSyncPlanWithChapter,
+    onOpenAgentPanel,
     isPlanReady,
     activeTasks,
 }) => {
@@ -260,6 +262,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
                             onReviseChapter={(prompt: string) => handleChapterAction(onReviseChapter, prompt)}
                             onRegenerateChapter={() => handleChapterAction(onRegenerateChapter)}
                             onSyncPlanWithChapter={() => handleChapterAction(onSyncPlanWithChapter)}
+                            onOpenAgentPanel={onOpenAgentPanel}
                             isPlanReady={isPlanReady}
                             activeTasks={activeTasks}
                         />

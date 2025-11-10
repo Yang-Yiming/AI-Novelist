@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Chapter, ActiveTasks, Plan, WorldSettings } from '../types';
-import { BookOpenIcon, DownloadIcon, SparklesIcon, CheckBadgeIcon, SyncIcon, RefreshIcon } from './icons';
+import { BookOpenIcon, DownloadIcon, SparklesIcon, CheckBadgeIcon, SyncIcon, RefreshIcon, MagicWandIcon } from './icons';
 import LoadingSpinner from './LoadingSpinner';
 
 interface ManuscriptToolbarProps {
@@ -16,6 +16,7 @@ interface ManuscriptToolbarProps {
     onReviseChapter: (prompt: string) => void;
     onRegenerateChapter: () => void;
     onSyncPlanWithChapter: () => void;
+    onOpenAgentPanel: () => void;
     isPlanReady: boolean;
     activeTasks: ActiveTasks;
 }
@@ -27,7 +28,7 @@ const PaperAirplaneIcon: React.FC = () => (
 );
 
 const ManuscriptToolbar: React.FC<ManuscriptToolbarProps> = ({
-    plan, chapters, activeChapterId, onWriteChapter, onExportChapter, onChapterSelect, onNavigateChapter, onCheckChapter, onReviseChapter, onRegenerateChapter, onSyncPlanWithChapter, isPlanReady, activeTasks
+    plan, chapters, activeChapterId, onWriteChapter, onExportChapter, onChapterSelect, onNavigateChapter, onCheckChapter, onReviseChapter, onRegenerateChapter, onSyncPlanWithChapter, onOpenAgentPanel, isPlanReady, activeTasks
 }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showRevisionPanel, setShowRevisionPanel] = useState(false);
@@ -38,7 +39,7 @@ const ManuscriptToolbar: React.FC<ManuscriptToolbarProps> = ({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const activeChapterIndex = activeChapterId !== null ? chapters.findIndex(c => c.id === activeChapterId) : -1;
 
-    const isAnyTaskActive = activeTasks.writingChapter || Object.keys(activeTasks.checkingChapter).length > 0 || Object.keys(activeTasks.revisingChapter).length > 0 || Object.keys(activeTasks.syncingPlan).length > 0;
+    const isAnyTaskActive = activeTasks.writingChapter || Object.keys(activeTasks.checkingChapter).length > 0 || Object.keys(activeTasks.revisingChapter).length > 0 || Object.keys(activeTasks.syncingPlan).length > 0 || activeTasks.agentIsRunning;
     const isCurrentChecking = activeChapterIndex !== -1 && activeTasks.checkingChapter[activeChapterIndex];
     const isCurrentRevising = activeChapterIndex !== -1 && activeTasks.revisingChapter[activeChapterIndex];
     const isCurrentSyncing = activeChapterIndex !== -1 && activeTasks.syncingPlan[activeChapterIndex];
@@ -251,7 +252,15 @@ const ManuscriptToolbar: React.FC<ManuscriptToolbarProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-1">
+                        <div className="relative group">
+                            <button onClick={onOpenAgentPanel} disabled={!isPlanReady || isAnyTaskActive} className="flex items-center justify-center w-11 h-11 bg-indigo-600 text-white font-semibold rounded-full hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors">
+                                <MagicWandIcon />
+                            </button>
+                            <span className="absolute bottom-full mb-2 right-0 whitespace-nowrap px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity dark:bg-gray-700 pointer-events-none">
+                                AI Agent
+                            </span>
+                        </div>
                         <div className="relative group">
                             <button onClick={() => setShowWritingPanel(true)} disabled={!isPlanReady || isAnyTaskActive} className="flex items-center justify-center w-11 h-11 bg-green-600 text-white font-semibold rounded-full hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors">
                                 {activeTasks.writingChapter ? <LoadingSpinner size="h-5 w-5" /> : <BookOpenIcon />}

@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, FunctionDeclaration, Chat } from "@google/genai";
-import { Plan, CheckerFeedback, Chapter } from '../types';
+import { Plan, CheckerFeedback, Chapter, AgentLogEntry } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
@@ -234,7 +234,7 @@ Now, write Chapter ${chapterNumber} following the outline.`;
             break; // Model is done with tools.
         }
 
-        const toolResponses = [];
+        const toolResponseParts = [];
 
         for (const call of functionCalls) {
             let result: any;
@@ -272,17 +272,17 @@ Now, write Chapter ${chapterNumber} following the outline.`;
             } catch (e: any) {
                 result = `Error executing tool: ${e.message}`;
             }
-
-            toolResponses.push({
-                functionResponses: {
-                    id: call.id,
+            
+            const content = typeof result === 'object' ? JSON.stringify(result, null, 2) : result;
+            toolResponseParts.push({
+                functionResponse: {
                     name: call.name,
-                    response: { result: result },
+                    response: { content },
                 }
             });
         }
         
-        response = await chat.sendMessage({ toolResponses });
+        response = await chat.sendMessage({ message: toolResponseParts });
     }
 
     return response.text;
@@ -328,7 +328,7 @@ Now, begin your revision process.`;
             break; // Model is done with tools.
         }
 
-        const toolResponses = [];
+        const toolResponseParts = [];
 
         for (const call of functionCalls) {
             let result: any;
@@ -377,16 +377,16 @@ Now, begin your revision process.`;
                 result = `Error executing tool: ${e.message}`;
             }
 
-            toolResponses.push({
-                functionResponses: {
-                    id: call.id,
+            const content = typeof result === 'object' ? JSON.stringify(result, null, 2) : result;
+            toolResponseParts.push({
+                functionResponse: {
                     name: call.name,
-                    response: { result: result },
+                    response: { content },
                 }
             });
         }
         
-        response = await chat.sendMessage({ toolResponses });
+        response = await chat.sendMessage({ message: toolResponseParts });
     }
 
     // After the loop, the model should give the final text. If not, return the last known state of the content.
@@ -453,4 +453,246 @@ Now, provide the complete and updated JSON for the entire plan.`;
 
     const jsonText = response.text.trim();
     return parseAndPreparePlan(jsonText);
+};
+
+// --- AGENT ---
+
+const listStructure: FunctionDeclaration = {
+    name: 'listStructure',
+    parameters: { type: Type.OBJECT, properties: {} },
+    description: "Lists the novel's overall structure, including characters and chapter titles, to get a high-level overview."
+};
+
+const refinePlanTool: FunctionDeclaration = {
+    name: 'refinePlanTool',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            refinementPrompt: { type: Type.STRING, description: "A detailed prompt describing the changes to be made to the novel's plan." }
+        },
+        required: ['refinementPrompt']
+    },
+    description: "Refines the entire novel plan based on a prompt. Use this to make changes to world, characters, or plot outline."
+};
+
+const writeChapterTool: FunctionDeclaration = {
+    name: 'writeChapterTool',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            userPrompt: { type: Type.STRING, description: "Optional instructions for the writer agent on what to focus on in this new chapter." }
+        },
+        required: []
+    },
+    description: "Writes the next chapter of the novel, following the plot outline."
+};
+
+const reviseChapterTool: FunctionDeclaration = {
+    name: 'reviseChapterTool',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            chapterNumber: { type: Type.INTEGER, description: "The number of the chapter to revise." },
+            revisionPrompt: { type: Type.STRING, description: "A detailed prompt describing the revisions to be made to the chapter." }
+        },
+        required: ['chapterNumber', 'revisionPrompt']
+    },
+    description: "Revises the content of a specific chapter based on a prompt."
+};
+
+const checkChapterTool: FunctionDeclaration = {
+    name: 'checkChapterTool',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            chapterNumber: { type: Type.INTEGER, description: "The number of the chapter to check for consistency." }
+        },
+        required: ['chapterNumber']
+    },
+    description: "Checks a chapter for consistency with the novel plan and provides feedback."
+};
+
+const finishTool: FunctionDeclaration = {
+    name: 'finishTool',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            finalMessage: { type: Type.STRING, description: "A message to the user summarizing the work done and confirming the task is complete." }
+        },
+        required: ['finalMessage']
+    },
+    description: "Signals that the agent has completed its task successfully. This must be the final tool called."
+};
+
+const agentTools = [
+    listStructure,
+    readChapterContent,
+    findInManuscript,
+    refinePlanTool,
+    writeChapterTool,
+    reviseChapterTool,
+    checkChapterTool,
+    finishTool,
+];
+
+export const runAgent = async (
+    task: string,
+    currentPlan: Plan,
+    currentChapters: Chapter[],
+    globalSystemPrompt: string,
+    onUpdate: (log: AgentLogEntry, updatedData?: { plan?: Plan, chapters?: Chapter[] }) => void
+): Promise<void> => {
+
+    let plan = { ...currentPlan };
+    let chapters = [...currentChapters];
+
+    const chat: Chat = ai.chats.create({
+        model: 'gemini-2.5-pro',
+        config: {
+            tools: [{ functionDeclarations: agentTools }],
+        },
+    });
+
+    const getStructure = () => ({
+        tone: plan.tone,
+        characters: plan.characterSettings.map(c => c.name),
+        chapters: chapters.map(c => c.title)
+    });
+
+    const initialPrompt = `${globalSystemPrompt}\n\nYou are an autonomous AI Novelist Agent. Your task is to complete the user's request by creating a plan and then executing it using the available tools.
+Think step-by-step. First, analyze the request and the novel's structure. Then, formulate a clear plan of tool calls. Execute the plan one tool at a time, analyzing the results before proceeding to the next step.
+If a step fails or the result isn't what you expected, you can re-plan or try a different approach.
+Once the user's request is fully addressed, you MUST call the 'finishTool' to end the session.
+
+**User's Task:** ${task}
+
+**Current Novel Structure:**
+${JSON.stringify(getStructure(), null, 2)}
+
+Begin by thinking about your plan.`;
+
+    onUpdate({ type: 'thought', content: "Agent is initializing and creating a plan..." });
+
+    let response = await chat.sendMessage({ message: initialPrompt });
+
+    const MAX_TURNS = 10;
+    for (let i = 0; i < MAX_TURNS; i++) {
+        if (response.text) {
+            onUpdate({ type: 'thought', content: response.text });
+        }
+
+        const functionCalls = response.functionCalls;
+        if (!functionCalls || functionCalls.length === 0) {
+            onUpdate({ type: 'finish', content: "Agent finished without calling the finish tool. Task may be complete." });
+            break;
+        }
+
+        const toolResponseParts = [];
+
+        for (const call of functionCalls) {
+            let result: any;
+            let updatedData: { plan?: Plan, chapters?: Chapter[] } = {};
+
+            onUpdate({ type: 'action', content: { name: call.name, args: call.args } });
+
+            try {
+                switch (call.name) {
+                    case 'listStructure':
+                        result = getStructure();
+                        break;
+                    case 'readChapterContent': {
+                        const { chapterNumber, lastWords } = call.args;
+                        if (chapterNumber < 1 || chapterNumber > chapters.length) {
+                            result = `Error: Invalid chapter number. There are only ${chapters.length} chapters.`;
+                        } else {
+                            let content = chapters[chapterNumber - 1].content;
+                            if (lastWords) {
+                                content = content.split(' ').slice(-lastWords).join(' ');
+                            }
+                            result = content;
+                        }
+                        break;
+                    }
+                    case 'findInManuscript': {
+                        const { query, caseSensitive = false } = call.args;
+                        const findings: string[] = [];
+                        chapters.forEach((chapter, idx) => {
+                            const content = caseSensitive ? chapter.content : chapter.content.toLowerCase();
+                            const searchQuery = caseSensitive ? query : query.toLowerCase();
+                            if (content.includes(searchQuery)) {
+                                findings.push(`Found in Chapter ${idx + 1}.`);
+                            }
+                        });
+                        result = findings.length > 0 ? findings.join('\n') : `'${query}' not found in any chapter.`;
+                        break;
+                    }
+                    case 'refinePlanTool': {
+                        const newPlan = await refinePlan(plan, call.args.refinementPrompt, globalSystemPrompt);
+                        plan = newPlan;
+                        updatedData.plan = newPlan;
+                        result = "Plan has been successfully refined.";
+                        break;
+                    }
+                    case 'writeChapterTool': {
+                        const newChapterContent = await writeChapter(plan, chapters, chapters.length + 1, null, globalSystemPrompt, call.args.userPrompt || '');
+                        const newChapter: Chapter = { id: chapters.length + 1, title: `Chapter ${chapters.length + 1}`, content: newChapterContent };
+                        chapters.push(newChapter);
+                        updatedData.chapters = [...chapters];
+                        result = `Successfully wrote Chapter ${newChapter.id}.`;
+                        break;
+                    }
+                    case 'reviseChapterTool': {
+                        const { chapterNumber, revisionPrompt } = call.args;
+                        const chapterIndex = chapterNumber - 1;
+                        if (chapterIndex < 0 || chapterIndex >= chapters.length) {
+                            result = `Error: Invalid chapter number ${chapterNumber}.`;
+                        } else {
+                            const revisedContent = await reviseChapter(plan, chapters, chapterIndex, revisionPrompt, globalSystemPrompt);
+                            const oldChapter = chapters[chapterIndex];
+                            const { feedback, ...rest } = oldChapter;
+                            chapters[chapterIndex] = { ...rest, content: revisedContent };
+                            updatedData.chapters = [...chapters];
+                            result = `Successfully revised Chapter ${chapterNumber}.`;
+                        }
+                        break;
+                    }
+                    case 'checkChapterTool': {
+                        const { chapterNumber } = call.args;
+                        const chapterIndex = chapterNumber - 1;
+                        if (chapterIndex < 0 || chapterIndex >= chapters.length) {
+                            result = `Error: Invalid chapter number ${chapterNumber}.`;
+                        } else {
+                            const feedback = await checkChapter(plan, chapters[chapterIndex].content, globalSystemPrompt);
+                            chapters[chapterIndex].feedback = feedback;
+                            updatedData.chapters = [...chapters];
+                            result = feedback;
+                        }
+                        break;
+                    }
+                    case 'finishTool': {
+                        onUpdate({ type: 'finish', content: call.args.finalMessage });
+                        return; // End execution
+                    }
+                    default:
+                        result = `Error: Unknown tool '${call.name}'`;
+                }
+            } catch (e: any) {
+                result = `Error executing tool: ${e.message}`;
+                onUpdate({ type: 'error', content: `Error executing tool ${call.name}: ${e.message}` });
+            }
+
+            onUpdate({ type: 'result', content: result }, updatedData);
+
+            const content = typeof result === 'object' ? JSON.stringify(result, null, 2) : result;
+            toolResponseParts.push({
+                functionResponse: {
+                    name: call.name,
+                    response: { content },
+                }
+            });
+        }
+
+        response = await chat.sendMessage({ message: toolResponseParts });
+    }
+    onUpdate({ type: 'error', content: "Agent reached maximum turns without finishing. Please check the results and try again if needed." });
 };

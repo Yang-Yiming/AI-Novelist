@@ -45,11 +45,23 @@ export type Agent = 'planner' | 'writer' | 'checker';
 
 export type AppState = 'INITIAL' | 'PLANNING' | 'WRITING' | 'ERROR';
 
+export interface AgentLogEntry {
+  type: 'plan' | 'thought' | 'action' | 'result' | 'error' | 'finish';
+  content: string | object;
+}
+
+export interface AgentState {
+  isRunning: boolean;
+  task: string;
+  logs: AgentLogEntry[];
+}
+
 export interface ActiveTasks {
     writingChapter: boolean;
     checkingChapter: Record<number, boolean>; // key: chapter index
     revisingChapter: Record<number, boolean>; // key: chapter index
     syncingPlan: Record<number, boolean>; // key: chapter index
+    agentIsRunning: boolean;
 }
 
 export interface AppSettings {
