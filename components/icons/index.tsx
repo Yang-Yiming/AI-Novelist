@@ -18,3 +18,5 @@ export { default as AgentIcon } from './AgentIcon';
 export { default as MagicWandIcon } from './MagicWandIcon';
 export { default as PhotoIcon } from './PhotoIcon';
 export { default as PrinterIcon } from './PrinterIcon';
+export { default as XMarkIcon } from './XMarkIcon';
+export { default as ClipboardDocumentIcon } from './ClipboardDocumentIcon';

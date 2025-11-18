@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { marked } from 'marked';
 import { AppState, Chapter, ActiveTasks, Plan } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import ManuscriptToolbar from './ManuscriptToolbar';
-import { SparklesIcon, CodeBracketIcon, DocumentTextIcon } from './icons';
+import IllustrationModal from './IllustrationModal';
+import { SparklesIcon, CodeBracketIcon, DocumentTextIcon, PhotoIcon } from './icons';
+import { generateSceneImage } from '../services/geminiService';
 
 interface WorkspaceProps {
     appState: AppState;
@@ -52,6 +54,12 @@ const Workspace: React.FC<WorkspaceProps> = ({
     const [viewModes, setViewModes] = useState<Record<number, 'text' | 'markdown'>>({});
     const activeChapterTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+    // Illustration State
+    const [selectedText, setSelectedText] = useState<string | null>(null);
+    const [selectionPosition, setSelectionPosition] = useState<{x: number, y: number} | null>(null);
+    const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    const [illustrationResult, setIllustrationResult] = useState<{url: string, prompt: string} | null>(null);
+
     const activeChapterIndex = activeChapterId !== null ? chapters.findIndex(c => c.id === activeChapterId) : -1;
     const activeChapter = activeChapterIndex !== -1 ? chapters[activeChapterIndex] : null;
 
@@ -67,6 +75,17 @@ const Workspace: React.FC<WorkspaceProps> = ({
         resizeTextarea(activeChapterTextareaRef.current);
     }, [activeChapterId]);
 
+    // Close floating menu when clicking elsewhere
+    useEffect(() => {
+        const handleClickOutside = () => {
+            // Only clear if we aren't actively interacting with the tooltip (handled by stopping propagation on the tooltip)
+            setSelectionPosition(null);
+            setSelectedText(null);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         // Resize immediately on input to avoid cursor jumps
         resizeTextarea(e.currentTarget);
@@ -81,6 +100,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
             ...prev,
             [chapterId]: mode,
         }));
+        setSelectionPosition(null); // Clear selection on mode switch
     };
     
     const handleNavigateChapter = (direction: 'prev' | 'next') => {
@@ -131,6 +151,38 @@ const Workspace: React.FC<WorkspaceProps> = ({
         URL.revokeObjectURL(url);
     };
 
+    const handleMouseUp = useCallback((e: React.MouseEvent) => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) {
+            setSelectionPosition(null);
+            setSelectedText(null);
+            return;
+        }
+
+        const text = selection.toString().trim();
+        if (text.length > 10) { // Minimum length check
+            // We use page coordinates to position the tooltip near the cursor
+            setSelectionPosition({ x: e.pageX, y: e.pageY - 40 });
+            setSelectedText(text);
+        }
+    }, []);
+
+    const handleGenerateIllustration = async () => {
+        if (!selectedText || !plan) return;
+        
+        setIsGeneratingImage(true);
+        try {
+            const imageUrl = await generateSceneImage(selectedText, plan.tone);
+            setIllustrationResult({ url: imageUrl, prompt: selectedText });
+        } catch (error) {
+            console.error("Failed to generate illustration", error);
+            alert("Failed to generate illustration. Please try again.");
+        } finally {
+            setIsGeneratingImage(false);
+            setSelectionPosition(null);
+            setSelectedText(null);
+        }
+    };
 
     if (isPlanLoading) {
         return (
@@ -172,7 +224,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
                 return (
                     <>
-                        <div className="max-w-4xl mx-auto pb-48 flex flex-col min-h-full w-full">
+                        <div className="max-w-4xl mx-auto pb-48 flex flex-col min-h-full w-full relative">
                             {chapters.length === 0 && !activeTasks.writingChapter && (
                                 <div className="text-center p-8 m-auto bg-white dark:bg-slate-800/50 rounded-lg shadow-md">
                                     <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200">Your Manuscript Awaits</h3>
@@ -204,22 +256,42 @@ const Workspace: React.FC<WorkspaceProps> = ({
                                         </div>
                                      </div>
 
-                                    {viewMode === 'text' ? (
-                                        <textarea
-                                            ref={activeChapterTextareaRef}
-                                            className="w-full max-w-none flex-grow p-2 font-serif leading-relaxed bg-transparent resize-none border-0 focus:ring-0 disabled:opacity-70 text-gray-900 dark:text-gray-300"
-                                            style={{ fontSize: 'var(--markdown-font-size)' }}
-                                            value={activeChapter.content}
-                                            onChange={handleContentChange}
-                                            disabled={isAnyTaskActive}
-                                            rows={1}
-                                        />
-                                    ) : (
-                                        <div
-                                            className="prose dark:prose-invert font-serif leading-relaxed p-2 max-w-none prose-dynamic"
-                                            dangerouslySetInnerHTML={{ __html: marked(activeChapter.content) as string }}
-                                        />
+                                    {/* Text Selection Toolbar */}
+                                    {selectionPosition && (
+                                        <div 
+                                            className="fixed z-50 animate-fade-in-up" 
+                                            style={{ left: selectionPosition.x, top: selectionPosition.y }}
+                                            onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking the tooltip itself
+                                        >
+                                            <button 
+                                                onClick={handleGenerateIllustration}
+                                                disabled={isGeneratingImage}
+                                                className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-full shadow-xl hover:bg-gray-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 transition-transform transform hover:scale-105 disabled:opacity-70 disabled:cursor-wait"
+                                            >
+                                                {isGeneratingImage ? <LoadingSpinner size="h-4 w-4" /> : <PhotoIcon />}
+                                                {isGeneratingImage ? 'Illustrating...' : 'Illustrate Selection'}
+                                            </button>
+                                        </div>
                                     )}
+
+                                    <div onMouseUp={handleMouseUp} className="flex-grow flex flex-col">
+                                        {viewMode === 'text' ? (
+                                            <textarea
+                                                ref={activeChapterTextareaRef}
+                                                className="w-full max-w-none flex-grow p-2 font-serif leading-relaxed bg-transparent resize-none border-0 focus:ring-0 disabled:opacity-70 text-gray-900 dark:text-gray-300"
+                                                style={{ fontSize: 'var(--markdown-font-size)' }}
+                                                value={activeChapter.content}
+                                                onChange={handleContentChange}
+                                                disabled={isAnyTaskActive}
+                                                rows={1}
+                                            />
+                                        ) : (
+                                            <div
+                                                className="prose dark:prose-invert font-serif leading-relaxed p-2 max-w-none prose-dynamic select-text"
+                                                dangerouslySetInnerHTML={{ __html: marked(activeChapter.content) as string }}
+                                            />
+                                        )}
+                                    </div>
 
                                      {activeChapter.feedback && (
                                         <div className="mt-4 bg-gray-100 dark:bg-slate-900/50 p-4 rounded-lg border border-gray-200 dark:border-slate-700">
@@ -265,6 +337,12 @@ const Workspace: React.FC<WorkspaceProps> = ({
                             onOpenAgentPanel={onOpenAgentPanel}
                             isPlanReady={isPlanReady}
                             activeTasks={activeTasks}
+                        />
+                        <IllustrationModal 
+                            isOpen={!!illustrationResult}
+                            onClose={() => setIllustrationResult(null)}
+                            imageUrl={illustrationResult?.url || ''}
+                            prompt={illustrationResult?.prompt || ''}
                         />
                     </>
                 );

@@ -494,6 +494,29 @@ export const generateCharacterImage = async (character: CharacterProfile, tone: 
     throw new Error("No image generated");
 };
 
+export const generateSceneImage = async (sceneDescription: string, tone: string): Promise<string> => {
+    const prompt = `Create a compelling digital illustration for a novel scene.
+    Scene Description: "${sceneDescription}"
+    Art Style/Tone: ${tone}
+    Requirements: Cinematic lighting, detailed environment, consistent with the tone.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [{ text: prompt }]
+        },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (part && part.inlineData && part.inlineData.data) {
+        return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+    }
+    throw new Error("No image generated");
+};
+
 
 // --- AGENT ---
 
