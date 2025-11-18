@@ -16,3 +16,5 @@ export { default as DocumentTextIcon } from './DocumentTextIcon';
 export { default as RefreshIcon } from './RefreshIcon';
 export { default as AgentIcon } from './AgentIcon';
 export { default as MagicWandIcon } from './MagicWandIcon';
+export { default as PhotoIcon } from './PhotoIcon';
+export { default as PrinterIcon } from './PrinterIcon';

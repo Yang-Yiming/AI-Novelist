@@ -11,6 +11,7 @@ export interface CharacterProfile {
   name: string;
   description: string;
   motivation: string;
+  imageUrl?: string;
 }
 
 export interface PlotPoint {

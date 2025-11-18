@@ -6,7 +6,8 @@ import PlannerPanel from './components/PlannerPanel';
 import Workspace from './components/Workspace';
 import SettingsModal from './components/SettingsModal';
 import AgentPanel from './components/AgentPanel';
-import { CogIcon, SaveIcon, FolderOpenIcon } from './components/icons';
+import ExportModal from './components/ExportModal';
+import { CogIcon, SaveIcon, FolderOpenIcon, DownloadIcon } from './components/icons';
 
 const App: React.FC = () => {
     const [initialIdea, setInitialIdea] = useState<string>('');
@@ -19,6 +20,7 @@ const App: React.FC = () => {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [activeTasks, setActiveTasks] = useState<ActiveTasks>({ writingChapter: false, checkingChapter: {}, revisingChapter: {}, syncingPlan: {}, agentIsRunning: false });
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isExportOpen, setIsExportOpen] = useState(false);
     const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
     const [agentState, setAgentState] = useState<AgentState>({ isRunning: false, task: '', logs: [] });
     const [settings, setSettings] = useState<AppSettings>({ 
@@ -375,10 +377,11 @@ const App: React.FC = () => {
                         <p className="text-lg text-gray-500 dark:text-gray-400 mt-1">From a single idea to a complete manuscript, powered by AI agents.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={handleSaveState} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Save Session"><SaveIcon /></button>
-                        <button onClick={triggerLoadFile} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Load Session"><FolderOpenIcon /></button>
+                        <button onClick={() => setIsExportOpen(true)} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Export Novel" title="Export Options"><DownloadIcon /></button>
+                        <button onClick={handleSaveState} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Save Session" title="Save Session"><SaveIcon /></button>
+                        <button onClick={triggerLoadFile} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Load Session" title="Load Session"><FolderOpenIcon /></button>
                         <input type="file" id="loadFile" accept=".json" onChange={handleLoadState} className="hidden" />
-                        <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Open Settings"><CogIcon /></button>
+                        <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Open Settings" title="Settings"><CogIcon /></button>
                     </div>
                 </header>
                 
@@ -416,6 +419,12 @@ const App: React.FC = () => {
                 onClose={() => setIsSettingsOpen(false)}
                 settings={settings}
                 onSave={handleSettingsSave}
+            />
+            <ExportModal 
+                isOpen={isExportOpen}
+                onClose={() => setIsExportOpen(false)}
+                plan={plan}
+                chapters={chapters}
             />
             <AgentPanel
                 isOpen={isAgentPanelOpen}

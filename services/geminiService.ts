@@ -1,12 +1,26 @@
 
-import { GoogleGenAI, Type, FunctionDeclaration, Chat } from "@google/genai";
-import { Plan, CheckerFeedback, Chapter, AgentLogEntry } from '../types';
+import { GoogleGenAI, Type, FunctionDeclaration, Chat, GenerateContentResponse, Modality } from "@google/genai";
+import { Plan, CheckerFeedback, Chapter, AgentLogEntry, CharacterProfile } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Helper to safely extract text from a response without triggering warnings
+const getTextFromResponse = (response: GenerateContentResponse): string => {
+    let text = '';
+    if (response?.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.text) {
+                text += part.text;
+            }
+        }
+    }
+    return text;
+};
+
 
 const planSchema = {
     type: Type.OBJECT,
@@ -285,7 +299,7 @@ Now, write Chapter ${chapterNumber} following the outline.`;
         response = await chat.sendMessage({ message: toolResponseParts });
     }
 
-    return response.text;
+    return getTextFromResponse(response);
 };
 
 export const reviseChapter = async (plan: Plan, chapters: Chapter[], chapterIndex: number, revisionPrompt: string, globalSystemPrompt: string): Promise<string> => {
@@ -389,8 +403,8 @@ Now, begin your revision process.`;
         response = await chat.sendMessage({ message: toolResponseParts });
     }
 
-    // After the loop, the model should give the final text. If not, return the last known state of the content.
-    return response.text || currentChapterContent;
+    const finalText = getTextFromResponse(response);
+    return finalText || currentChapterContent;
 };
 
 
@@ -454,6 +468,32 @@ Now, provide the complete and updated JSON for the entire plan.`;
     const jsonText = response.text.trim();
     return parseAndPreparePlan(jsonText);
 };
+
+export const generateCharacterImage = async (character: CharacterProfile, tone: string): Promise<string> => {
+    const prompt = `Create a high-quality digital art character portrait.
+    Character Name: ${character.name}
+    Description: ${character.description}
+    Motivation: ${character.motivation}
+    Art Style/Tone of the World: ${tone}
+    Focus on the face and upper body. Detailed, evocative, professional concept art style.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [{ text: prompt }]
+        },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (part && part.inlineData && part.inlineData.data) {
+        return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+    }
+    throw new Error("No image generated");
+};
+
 
 // --- AGENT ---
 
@@ -577,8 +617,9 @@ Begin by thinking about your plan.`;
 
     const MAX_TURNS = 10;
     for (let i = 0; i < MAX_TURNS; i++) {
-        if (response.text) {
-            onUpdate({ type: 'thought', content: response.text });
+        const thoughtText = getTextFromResponse(response);
+        if (thoughtText) {
+            onUpdate({ type: 'thought', content: thoughtText });
         }
 
         const functionCalls = response.functionCalls;
